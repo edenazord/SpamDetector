@@ -5,12 +5,12 @@ plugins {
 
 android {
     namespace 'com.spamdetector'
-    compileSdk 34
+    compileSdk 33
 
     defaultConfig {
         applicationId "com.spamdetector"
         minSdk 23
-        targetSdk 34
+        targetSdk 33
         versionCode 1
         versionName "1.0"
 
@@ -29,6 +29,11 @@ android {
     }
     kotlinOptions {
         jvmTarget = '1.8'
+    }
+    
+    buildFeatures {
+        viewBinding false
+        dataBinding false
     }
 }
 
