@@ -1,8 +1,45 @@
-package com.spamdetector
+pac        val results = StringBuilder("🧪 Test 'Salva al Volo':\n\n")
+        
+        testNumbers.forEach { number ->
+            val tempInfo = spamChecker.getTempContactInfo(number)
+            val isSpam = spamChecker.isSpam(number)
+            
+            val status = when {
+                !tempInfo.wasCreated -> "❌ Errore creazione (ERRORE)"
+                !tempInfo.hasPhoto -> "🚨 NO foto sync (SPAM)"
+                else -> "✅ Foto generata (SICURO)"
+            }
+            
+            results.append("$number → $status\n")
+            results.append("   📝 Creato: ${tempInfo.wasCreated}\n")
+            results.append("   📸 Foto: ${tempInfo.hasPhoto}\n")
+            results.append("   🔄 Sync: ${tempInfo.syncedWithSocial}\n")
+        }ctor
 
 import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Bundle
+import android.content.pm.Packag        val results = StringBuilder("🧪 Test Rilevamento Spam (WhatsApp + Foto):\n\n")
+        
+        testNumbers.forEach { number ->
+            val whatsappInfo = spamChecker.getWhatsAppInfo(number)
+            val isSpam = spamChecker.isSpam(number)
+            
+            val status = when {
+                !whatsappInfo.hasWhatsApp -> "🚨 NO WhatsApp (SPAM)"
+                whatsappInfo.hasWhatsApp && whatsappInfo.hasPhoto -> "✅ WhatsApp + Foto (SICURO)"
+                whatsappInfo.hasWhatsApp && !whatsappInfo.hasPhoto -> "⚠️ WhatsApp senza foto (SOSPETTO)"
+                else -> "❓ Indeterminato"
+            }
+            
+            results.append("$number → $status\n")
+            results.append("   💚 WhatsApp: ${whatsappInfo.hasWhatsApp}\n")
+            results.append("   � Foto: ${whatsappInfo.hasPhoto}\n")
+        }
+        
+        results.append("\n📊 ${spamChecker.getCheckStats()}")
+
+        statusTextView.text = results.toString()
+        
+        Toast.makeText(this, "Test 'Salva al Volo' completato", Toast.LENGTH_SHORT).show()ort android.os.Bundle
 import android.widget.Button
 import android.widget.Switch
 import android.widget.TextView
@@ -99,29 +136,19 @@ class MainActivity : AppCompatActivity() {
             "+441234567890"   // Numero UK
         )
 
-        val results = StringBuilder("🧪 Test 'Salva al Volo':\n\n")
+        val results = StringBuilder("🧪 Test Rilevamento Foto Profilo:\n\n")
         
         testNumbers.forEach { number ->
-            val tempInfo = spamChecker.getTempContactInfo(number)
             val isSpam = spamChecker.isSpam(number)
-            
-            val status = when {
-                !tempInfo.wasCreated -> "❌ Errore creazione (ERRORE)"
-                !tempInfo.hasPhoto -> "🚨 NO foto sync (SPAM)"
-                else -> "✅ Foto generata (SICURO)"
-            }
-            
+            val status = if (isSpam) "🚨 NO Foto (SPAM)" else "✅ Ha Foto (SICURO)"
             results.append("$number → $status\n")
-            results.append("   📝 Creato: ${tempInfo.wasCreated}\n")
-            results.append("   📸 Foto: ${tempInfo.hasPhoto}\n")
-            results.append("   🔄 Sync: ${tempInfo.syncedWithSocial}\n")
         }
         
-        results.append("\n📊 ${spamChecker.getCheckStats()}")
+        results.append("\n� ${spamChecker.getCheckStats()}")
 
         statusTextView.text = results.toString()
         
-        Toast.makeText(this, "Test 'Salva al Volo' completato", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Test controllo foto completato", Toast.LENGTH_SHORT).show()
     }
 
     private fun updateStatus() {

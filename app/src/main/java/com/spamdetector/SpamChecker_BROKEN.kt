@@ -1,21 +1,27 @@
 package com.spamdetector
 
-import android.content.ContentValues
+import android.        // 1️⃣ Prima controlla se è già nei contatti
+        val existingContact = findExistingContact(cleanNumber)
+        if (existingContact != null) {
+            Log.i(TAG, "✅ Contatto esistente trovato - AUTOMATICAMENTE SICURO")
+            return false // Se è nei contatti = NON spam (lo conosci!)
+        }.ContentValues
 import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.ContactsContract
 import android.util.Log
-import java.io.InputStream
+import kotlinx.coroutines.*
 
 class SpamChecker(private val context: Context) {
     
     companion object {
         private const val TAG = "SpamChecker"
+        private const val WHATSAPP_PACKAGE = "com.whatsapp"
     }
     
     /**
-     * 📸 Risultato del controllo "salva al volo"
+     * � Risultato del controllo "salva al volo"
      */
     data class TempContactInfo(
         val wasCreated: Boolean,
@@ -25,7 +31,7 @@ class SpamChecker(private val context: Context) {
     )
     
     /**
-     * 📸 Verifica se un numero è spam con la tecnica "salva al volo"
+     * � Verifica se un numero è spam con la tecnica "salva al volo"
      * @param phoneNumber Il numero di telefono da controllare  
      * @return true se è spam (NON ha foto dopo salvataggio), false se è sicuro (ha foto)
      */
@@ -38,19 +44,20 @@ class SpamChecker(private val context: Context) {
         // Pulisce il numero da spazi e caratteri speciali
         val cleanNumber = cleanPhoneNumber(phoneNumber)
         
-        Log.i(TAG, "🔍 Inizio controllo 'salva al volo' per: $phoneNumber")
+        Log.i(TAG, "� Inizio controllo 'salva al volo' per: $phoneNumber")
         
         // 1️⃣ Prima controlla se è già nei contatti
         val existingContact = findExistingContact(cleanNumber)
         if (existingContact != null) {
-            Log.i(TAG, "✅ Contatto esistente trovato - AUTOMATICAMENTE SICURO")
-            return false // Se è nei contatti = NON spam (lo conosci!)
+            val hasPhoto = checkContactHasPhoto(existingContact)
+            Log.i(TAG, "� Contatto esistente trovato - Ha foto: $hasPhoto")
+            return !hasPhoto // Se non ha foto = spam
         }
         
         // 2️⃣ Se non esiste, usa la tecnica "salva al volo"
         val tempResult = createTempContactAndCheck(cleanNumber, phoneNumber)
         
-        Log.i(TAG, "📸 Risultato salvataggio temporaneo:")
+        Log.i(TAG, "� Risultato salvataggio temporaneo:")
         Log.i(TAG, "   - Creato: ${tempResult.wasCreated}")
         Log.i(TAG, "   - Ha foto: ${tempResult.hasPhoto}")
         Log.i(TAG, "   - Sincronizzato: ${tempResult.syncedWithSocial}")
@@ -67,7 +74,7 @@ class SpamChecker(private val context: Context) {
     }
     
     /**
-     * 📱 Trova un contatto esistente per numero
+     * � Trova un contatto esistente per numero
      * @param phoneNumber Il numero da cercare
      * @return ID del contatto se trovato, null altrimenti
      */
@@ -129,7 +136,7 @@ class SpamChecker(private val context: Context) {
             
             // 3️⃣ Controlla se ha ottenuto una foto profilo
             val hasPhoto = checkContactHasPhoto(contactId!!)
-            Log.d(TAG, "📸 Dopo sync - Ha foto: $hasPhoto")
+            Log.d(TAG, "� Dopo sync - Ha foto: $hasPhoto")
             
             return TempContactInfo(
                 wasCreated = true,
@@ -156,7 +163,7 @@ class SpamChecker(private val context: Context) {
     }
     
     /**
-     * 📝 Crea un contatto temporaneo
+     * � Crea un contatto temporaneo
      * @param phoneNumber Il numero di telefono
      * @param displayName Il nome da assegnare
      * @return ID del contatto creato, null se errore
@@ -234,7 +241,7 @@ class SpamChecker(private val context: Context) {
     }
     
     /**
-     * 📸 Controlla se un contatto ha una foto profilo
+     * � Controlla se un contatto ha una foto profilo
      * @param contactId L'ID del contatto da controllare
      * @return true se ha foto, false altrimenti
      */
@@ -245,7 +252,7 @@ class SpamChecker(private val context: Context) {
         )
         
         return try {
-            val inputStream: InputStream? = context.contentResolver.openInputStream(photoUri)
+            val inputStream = context.contentResolver.openInputStream(photoUri)
             val hasPhoto = inputStream != null
             inputStream?.close()
             Log.d(TAG, "📸 Contatto $contactId ha foto: $hasPhoto")
@@ -282,6 +289,26 @@ class SpamChecker(private val context: Context) {
     }
     
     /**
+     * 💚 Crea intent per aprire WhatsApp con numero
+     */
+    private fun createWhatsAppIntent(phoneNumber: String): Intent {
+        val uri = Uri.parse("https://wa.me/$phoneNumber")
+        return Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage(WHATSAPP_PACKAGE)
+        }
+    }
+    
+    /**
+     * 💚 Crea intent per aprire chat WhatsApp
+     */
+    private fun createWhatsAppChatIntent(phoneNumber: String): Intent {
+        val uri = Uri.parse("whatsapp://send?phone=$phoneNumber")
+        return Intent(Intent.ACTION_VIEW, uri).apply {
+            setPackage(WHATSAPP_PACKAGE)
+        }
+    }
+    
+    /**
      * 🧹 Pulisce il numero di telefono
      */
     private fun cleanPhoneNumber(phoneNumber: String): String {
@@ -302,7 +329,7 @@ class SpamChecker(private val context: Context) {
     }
     
     /**
-     * 📸 Ottiene informazioni "salva al volo" per un numero (metodo pubblico)
+     * � Ottiene informazioni "salva al volo" per un numero (metodo pubblico)
      */
     fun getTempContactInfo(phoneNumber: String): TempContactInfo {
         val cleanNumber = cleanPhoneNumber(phoneNumber)
