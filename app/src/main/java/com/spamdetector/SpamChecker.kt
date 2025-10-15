@@ -106,7 +106,7 @@ class SpamChecker(private val context: Context) {
      * @param originalNumber Il numero originale per il nome
      * @return TempContactInfo con risultati
      */
-    private fun createTempContactAndCheck(cleanNumber: String, originalNumber: String): TempContactInfo {
+    fun createTempContactAndCheck(cleanNumber: String, originalNumber: String): TempContactInfo {
         var contactId: String? = null
         var wasCreated = false
         
@@ -284,7 +284,7 @@ class SpamChecker(private val context: Context) {
     /**
      * 🧹 Pulisce il numero di telefono
      */
-    private fun cleanPhoneNumber(phoneNumber: String): String {
+    fun cleanPhoneNumber(phoneNumber: String): String {
         var cleaned = phoneNumber.replace(Regex("[\\s\\-\\(\\)\\+]"), "")
         
         // Gestione prefissi Italia

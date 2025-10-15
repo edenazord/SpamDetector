@@ -66,7 +66,8 @@ class CallDetectionService : Service() {
         
         serviceScope.launch {
             try {
-                val tempInfo = spamChecker.createTempContactAndCheck(phoneNumber)
+                val cleanNumber = spamChecker.cleanPhoneNumber(phoneNumber)
+                val tempInfo = spamChecker.createTempContactAndCheck(cleanNumber, phoneNumber)
                 showSpamNotification(phoneNumber, tempInfo)
             } catch (e: Exception) {
                 Log.e(TAG, "Errore durante controllo spam", e)
