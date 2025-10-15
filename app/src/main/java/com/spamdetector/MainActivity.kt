@@ -321,7 +321,8 @@ class MainActivity : AppCompatActivity() {
             statusTextView.text = "❌ Errore aggiornamento status\n\nProva a riavviare l'app"
         }
         
-        permissionsButton.isEnabled = !hasPermissions
+        // Aggiorna il pulsante permessi (fuori dal try-catch per sicurezza)
+        permissionsButton.isEnabled = !hasRequiredPermissions()
     }
 
     private fun hasRequiredPermissions(): Boolean {
