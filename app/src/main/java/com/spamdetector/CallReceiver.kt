@@ -13,12 +13,19 @@ class CallReceiver : BroadcastReceiver() {
     }
 
     override fun onReceive(context: Context?, intent: Intent?) {
-        if (context == null || intent == null) return
+        Log.d(TAG, "🎯 CallReceiver attivato!")
+        
+        if (context == null || intent == null) {
+            Log.e(TAG, "❌ Context o Intent nulli!")
+            return
+        }
         
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
         val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
         
-        Log.d(TAG, "Stato chiamata: $state, Numero: $incomingNumber")
+        Log.d(TAG, "📞 Stato chiamata: $state, Numero: $incomingNumber")
+        Log.d(TAG, "🔍 Action: ${intent.action}")
+        Log.d(TAG, "📦 Extras: ${intent.extras}")
         
         when (state) {
             TelephonyManager.EXTRA_STATE_RINGING -> {
@@ -34,7 +41,7 @@ class CallReceiver : BroadcastReceiver() {
                         Log.d(TAG, "✅ Rilevamento spam attivo - Avvio controllo")
                         // Avvia il servizio di rilevamento spam
                         val serviceIntent = Intent(context, CallDetectionService::class.java)
-                        serviceIntent.putExtra("phone_number", incomingNumber)
+                        serviceIntent.putExtra("phoneNumber", incomingNumber)
                         serviceIntent.putExtra("action", "CHECK_SPAM")
                         context.startService(serviceIntent)
                     } else {

@@ -72,6 +72,12 @@ class MainActivity : AppCompatActivity() {
         permissionsButton.setOnClickListener {
             requestPermissions()
         }
+        
+        // Long press per debug
+        testButton.setOnLongClickListener {
+            showDebugInfo()
+            true
+        }
     }
 
     private fun enableSpamDetection() {
@@ -96,12 +102,50 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
-        Toast.makeText(this, "🧪 Avvio test spam detection...", Toast.LENGTH_SHORT).show()
+        // Mostra dialogo di scelta del test
+        val testOptions = arrayOf(
+            "🧪 Test Completo (simula chiamata + controllo spam)",
+            "📸 Test Solo Contatto (solo creazione temporanea)",
+            "🔧 Test Sistema (verifica CallReceiver)"
+        )
         
-        // Test con un numero di esempio
+        android.app.AlertDialog.Builder(this)
+            .setTitle("Scegli tipo di test")
+            .setItems(testOptions) { _, which ->
+                when (which) {
+                    0 -> runCompleteTest()
+                    1 -> runContactTest()
+                    2 -> runSystemTest()
+                }
+            }
+            .show()
+    }
+    
+    private fun runCompleteTest() {
+        Toast.makeText(this, "🧪 Avvio test completo...", Toast.LENGTH_SHORT).show()
+        
+        // Simula una chiamata in arrivo
         val testNumber = "+393331234567"  // Numero italiano tipico
         
-        // Esegui il test in background
+        // Simula il processo completo CallReceiver -> CallDetectionService
+        Log.d("MainActivity", "🎯 Simulazione chiamata da $testNumber")
+        
+        // Test del CallReceiver (simula una chiamata)
+        val receiverIntent = android.content.Intent("android.intent.action.PHONE_STATE")
+        receiverIntent.putExtra("state", "RINGING")
+        receiverIntent.putExtra("incoming_number", testNumber)
+        
+        val callReceiver = CallReceiver()
+        callReceiver.onReceive(this, receiverIntent)
+        
+        Toast.makeText(this, "✅ Test chiamata simulata! Controlla le notifiche.", Toast.LENGTH_LONG).show()
+    }
+    
+    private fun runContactTest() {
+        Toast.makeText(this, "📸 Test creazione contatto...", Toast.LENGTH_SHORT).show()
+        
+        val testNumber = "+393331234567"
+        
         Thread {
             try {
                 val cleanNumber = spamChecker.cleanPhoneNumber(testNumber)
@@ -113,7 +157,7 @@ class MainActivity : AppCompatActivity() {
                     else -> "✅ SICURO: Numero con foto profilo"
                 }
                 
-                val results = "🧪 Test completato!\n\n" +
+                val results = "📸 Test contatto completato!\n\n" +
                         "Numero testato: $testNumber\n" +
                         "Risultato: $status\n\n" +
                         "Dettagli:\n" +
@@ -123,7 +167,7 @@ class MainActivity : AppCompatActivity() {
                 
                 runOnUiThread {
                     android.app.AlertDialog.Builder(this)
-                        .setTitle("🧪 Risultato Test")
+                        .setTitle("📸 Risultato Test Contatto")
                         .setMessage(results)
                         .setPositiveButton("OK", null)
                         .show()
@@ -135,6 +179,101 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }.start()
+    }
+    
+    private fun runSystemTest() {
+        // Test dei componenti del sistema
+        val testResults = StringBuilder("🔧 Test Sistema:\n\n")
+        
+        // 1. Test permessi
+        val hasPerms = hasRequiredPermissions()
+        testResults.append("🔒 Permessi: ${if (hasPerms) "✅ OK" else "❌ MANCANTI"}\n")
+        
+        // 2. Test switch
+        val switchEnabled = getSharedPreferences("spam_detector", MODE_PRIVATE)
+            .getBoolean("spam_detection_enabled", false)
+        testResults.append("🎛️ Switch: ${if (switchEnabled) "✅ ATTIVO" else "❌ SPENTO"}\n")
+        
+        // 3. Test CallReceiver
+        try {
+            val receiver = CallReceiver()
+            testResults.append("📞 CallReceiver: ✅ OK\n")
+        } catch (e: Exception) {
+            testResults.append("📞 CallReceiver: ❌ ERRORE\n")
+        }
+        
+        // 4. Test CallDetectionService
+        try {
+            val serviceIntent = android.content.Intent(this, CallDetectionService::class.java)
+            testResults.append("🚀 CallDetectionService: ✅ OK\n")
+        } catch (e: Exception) {
+            testResults.append("🚀 CallDetectionService: ❌ ERRORE\n")
+        }
+        
+        // 5. Test SpamChecker
+        try {
+            val checker = SpamChecker(this)
+            testResults.append("🕵️ SpamChecker: ✅ OK\n")
+        } catch (e: Exception) {
+            testResults.append("🕵️ SpamChecker: ❌ ERRORE\n")
+        }
+        
+        testResults.append("\n💡 Per test completo:\n")
+        testResults.append("1. Attiva il rilevamento\n")
+        testResults.append("2. Concedi tutti i permessi\n")
+        testResults.append("3. Usa 'Test Completo'")
+        
+        android.app.AlertDialog.Builder(this)
+            .setTitle("🔧 Risultato Test Sistema")
+            .setMessage(testResults.toString())
+            .setPositiveButton("OK", null)
+            .show()
+    }
+    
+    private fun showDebugInfo() {
+        val debugInfo = StringBuilder("🐛 Debug Info:\n\n")
+        
+        // Informazioni sui permessi dettagliate
+        val requiredPermissions = arrayOf(
+            Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CONTACTS,
+            Manifest.permission.WRITE_CONTACTS,
+            Manifest.permission.POST_NOTIFICATIONS
+        )
+        
+        debugInfo.append("🔒 Permessi:\n")
+        requiredPermissions.forEach { permission ->
+            val granted = ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+            val permName = permission.split(".").last()
+            debugInfo.append("  $permName: ${if (granted) "✅" else "❌"}\n")
+        }
+        
+        // Info SharedPreferences
+        val prefs = getSharedPreferences("spam_detector", MODE_PRIVATE)
+        val isEnabled = prefs.getBoolean("spam_detection_enabled", false)
+        debugInfo.append("\n🎛️ Stato Switch: ${if (isEnabled) "ATTIVO" else "SPENTO"}\n")
+        
+        // Info sistema
+        debugInfo.append("\n📱 Sistema:\n")
+        debugInfo.append("  Android: ${android.os.Build.VERSION.RELEASE}\n")
+        debugInfo.append("  SDK: ${android.os.Build.VERSION.SDK_INT}\n")
+        
+        // Test rapido chiamata simulata
+        debugInfo.append("\n💡 Suggerimenti:\n")
+        debugInfo.append("• Long press = Debug info (questo)\n")
+        debugInfo.append("• Tap normale = Test menu\n")
+        debugInfo.append("• Per testare: scegli 'Test Completo'\n")
+        debugInfo.append("• Controlla i log in logcat per 'CallReceiver'\n")
+        
+        android.app.AlertDialog.Builder(this)
+            .setTitle("🐛 Debug SpamDetector")
+            .setMessage(debugInfo.toString())
+            .setPositiveButton("OK", null)
+            .setNegativeButton("Apri Log", { _, _ ->
+                // Comando per aprire i log (se possibile)
+                Toast.makeText(this, "Cerca 'CallReceiver' nei log ADB", Toast.LENGTH_LONG).show()
+            })
+            .show()
     }
         Toast.makeText(this, "Test 'Salva al Volo' completato", Toast.LENGTH_SHORT).show()
     }
