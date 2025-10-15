@@ -91,36 +91,51 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun testSpamDetection() {
-        // Test con numeri di esempio
-        val testNumbers = listOf(
-            "+393331234567",  // Numero italiano tipico
-            "+393401234567",  // Altro numero italiano
-            "+12025551234",   // Numero USA (probabilmente non in rubrica)
-            "+441234567890"   // Numero UK
-        )
-
-        val results = StringBuilder("🧪 Test 'Salva al Volo':\n\n")
-        
-        testNumbers.forEach { number ->
-            val tempInfo = spamChecker.getTempContactInfo(number)
-            val isSpam = spamChecker.isSpam(number)
-            
-            val status = when {
-                !tempInfo.wasCreated -> "❌ Errore creazione (ERRORE)"
-                !tempInfo.hasPhoto -> "🚨 NO foto sync (SPAM)"
-                else -> "✅ Foto generata (SICURO)"
-            }
-            
-            results.append("$number → $status\n")
-            results.append("   📝 Creato: ${tempInfo.wasCreated}\n")
-            results.append("   📸 Foto: ${tempInfo.hasPhoto}\n")
-            results.append("   🔄 Sync: ${tempInfo.syncedWithSocial}\n")
+        if (!hasRequiredPermissions()) {
+            Toast.makeText(this, "⚠️ Prima concedi i permessi!", Toast.LENGTH_LONG).show()
+            return
         }
         
-        results.append("\n📊 ${spamChecker.getCheckStats()}")
-
-        statusTextView.text = results.toString()
+        Toast.makeText(this, "🧪 Avvio test spam detection...", Toast.LENGTH_SHORT).show()
         
+        // Test con un numero di esempio
+        val testNumber = "+393331234567"  // Numero italiano tipico
+        
+        // Esegui il test in background
+        Thread {
+            try {
+                val cleanNumber = spamChecker.cleanPhoneNumber(testNumber)
+                val tempInfo = spamChecker.createTempContactAndCheck(cleanNumber, testNumber)
+                
+                val status = when {
+                    !tempInfo.wasCreated -> "❌ ERRORE: Impossibile creare contatto temporaneo"
+                    !tempInfo.hasPhoto -> "🚨 SPAM: Numero senza foto profilo"
+                    else -> "✅ SICURO: Numero con foto profilo"
+                }
+                
+                val results = "🧪 Test completato!\n\n" +
+                        "Numero testato: $testNumber\n" +
+                        "Risultato: $status\n\n" +
+                        "Dettagli:\n" +
+                        "• Contatto creato: ${if (tempInfo.wasCreated) "✅" else "❌"}\n" +
+                        "• Foto profilo: ${if (tempInfo.hasPhoto) "✅" else "❌"}\n" +
+                        "• Sincronizzato: ${if (tempInfo.syncedWithSocial) "✅" else "❌"}"
+                
+                runOnUiThread {
+                    android.app.AlertDialog.Builder(this)
+                        .setTitle("🧪 Risultato Test")
+                        .setMessage(results)
+                        .setPositiveButton("OK", null)
+                        .show()
+                }
+                
+            } catch (e: Exception) {
+                runOnUiThread {
+                    Toast.makeText(this, "❌ Errore durante test: ${e.message}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
         Toast.makeText(this, "Test 'Salva al Volo' completato", Toast.LENGTH_SHORT).show()
     }
 
@@ -129,9 +144,9 @@ class MainActivity : AppCompatActivity() {
         val hasPermissions = hasRequiredPermissions()
         
         val status = when {
-            !hasPermissions -> "❌ Permessi mancanti\n\nL'app ha bisogno dei permessi per accedere alle chiamate e inviare notifiche."
-            isEnabled -> "✅ Rilevamento Attivo\n\nL'app sta monitorando le chiamate in arrivo.\n\n${spamChecker.getCheckStats()}"
-            else -> "⏸️ Rilevamento Disattivato\n\nAttiva il rilevamento per iniziare a monitorare le chiamate spam."
+            !hasPermissions -> "❌ Permessi mancanti\n\nL'app ha bisogno dei permessi per accedere alle chiamate e ai contatti.\n\n🔒 Tocca 'CONCEDI PERMESSI' per abilitare le funzionalità."
+            isEnabled -> "✅ Rilevamento Attivo\n\nL'app sta monitorando le chiamate in arrivo in background.\n\n📸 Quando riceverai una chiamata sconosciuta, verrà creato un contatto temporaneo per testare se ha foto profilo.\n\n🚨 Numeri senza foto = Probabilmente spam\n✅ Numeri con foto = Probabilmente legittimi"
+            else -> "⏸️ Rilevamento Disattivato\n\nAttiva il rilevamento per iniziare a monitorare le chiamate spam.\n\n🧪 Puoi usare il pulsante 'TEST WHATSAPP' per testare il sistema."
         }
         
         if (statusTextView.text != status) {
