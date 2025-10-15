@@ -45,10 +45,20 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initializeViews() {
-        statusTextView = findViewById(R.id.statusTextView)
-        enableSwitch = findViewById(R.id.enableSwitch)
-        testButton = findViewById(R.id.testButton)
-        permissionsButton = findViewById(R.id.permissionsButton)
+        try {
+            statusTextView = findViewById(R.id.statusTextView)
+            enableSwitch = findViewById(R.id.enableSwitch) 
+            testButton = findViewById(R.id.testButton)
+            permissionsButton = findViewById(R.id.permissionsButton)
+            
+            Log.d("MainActivity", "✅ Views inizializzate correttamente")
+            
+            // Test immediato per vedere se le views funzionano
+            statusTextView.text = "🔄 Inizializzazione in corso..."
+            
+        } catch (e: Exception) {
+            Log.e("MainActivity", "❌ Errore inizializzazione views", e)
+        }
     }
 
     private fun setupListeners() {
@@ -124,6 +134,10 @@ class MainActivity : AppCompatActivity() {
     
     private fun runCompleteTest() {
         Toast.makeText(this, "🧪 Avvio test completo...", Toast.LENGTH_SHORT).show()
+        
+        // Salva timestamp del test
+        val prefs = getSharedPreferences("spam_detector", MODE_PRIVATE)
+        prefs.edit().putLong("last_test_time", System.currentTimeMillis()).apply()
         
         // Simula una chiamata in arrivo
         val testNumber = "+393331234567"  // Numero italiano tipico
@@ -270,25 +284,41 @@ class MainActivity : AppCompatActivity() {
             .setTitle("🐛 Debug SpamDetector")
             .setMessage(debugInfo.toString())
             .setPositiveButton("OK", null)
-            .setNegativeButton("Apri Log", { _, _ ->
-                // Comando per aprire i log (se possibile)
-                Toast.makeText(this, "Cerca 'CallReceiver' nei log ADB", Toast.LENGTH_LONG).show()
+            .setNegativeButton("Eventi Recenti", { _, _ ->
+                showRecentEvents()
             })
             .show()
     }
 
     private fun updateStatus() {
-        val isEnabled = enableSwitch.isChecked
-        val hasPermissions = hasRequiredPermissions()
-        
-        val status = when {
-            !hasPermissions -> "❌ Permessi mancanti\n\nL'app ha bisogno dei permessi per accedere alle chiamate e ai contatti.\n\n🔒 Tocca 'CONCEDI PERMESSI' per abilitare le funzionalità."
-            isEnabled -> "✅ Rilevamento Attivo\n\nL'app sta monitorando le chiamate in arrivo in background.\n\n📸 Quando riceverai una chiamata sconosciuta, verrà creato un contatto temporaneo per testare se ha foto profilo.\n\n🚨 Numeri senza foto = Probabilmente spam\n✅ Numeri con foto = Probabilmente legittimi"
-            else -> "⏸️ Rilevamento Disattivato\n\nAttiva il rilevamento per iniziare a monitorare le chiamate spam.\n\n🧪 Puoi usare il pulsante 'TEST WHATSAPP' per testare il sistema."
-        }
-        
-        if (statusTextView.text != status) {
+        try {
+            val isEnabled = enableSwitch.isChecked
+            val hasPermissions = hasRequiredPermissions()
+            
+            Log.d("MainActivity", "🔄 Aggiornamento status: enabled=$isEnabled, permissions=$hasPermissions")
+            
+            val status = when {
+                !hasPermissions -> {
+                    Log.d("MainActivity", "🔒 Permessi mancanti")
+                    "🔒 PERMESSI RICHIESTI\n\n❌ L'app ha bisogno dei permessi per:\n• Leggere stato chiamate\n• Accedere ai contatti\n• Creare contatti temporanei\n• Mostrare notifiche\n\n� Tocca 'CONCEDI PERMESSI' qui sotto"
+                }
+                isEnabled -> {
+                    Log.d("MainActivity", "✅ Rilevamento attivo")
+                    "✅ RILEVAMENTO ATTIVO\n\n📱 L'app sta monitorando le chiamate in background\n\n� Come funziona:\n📞 Chiamata sconosciuta arriva\n📝 Creo contatto temporaneo\n⏱️ Aspetto sincronizzazione\n� Controllo se appare foto\n🚨 Notifico se è spam\n\n💡 Funziona anche con app chiusa!"
+                }
+                else -> {
+                    Log.d("MainActivity", "⏸️ Rilevamento spento")
+                    "⏸️ RILEVAMENTO SPENTO\n\n🎛️ Attiva lo switch qui sopra per iniziare\n\n🧪 VUOI TESTARE?\nUsa il pulsante 'TEST WHATSAPP' per:\n• Verificare che tutto funzioni\n• Simulare una chiamata spam\n• Vedere come appare la notifica\n\n🔧 Usa long-press per debug"
+                }
+            }
+            
+            // Forza sempre l'aggiornamento
             statusTextView.text = status
+            Log.d("MainActivity", "📝 Testo impostato: ${status.substring(0, minOf(50, status.length))}...")
+            
+        } catch (e: Exception) {
+            Log.e("MainActivity", "❌ Errore in updateStatus", e)
+            statusTextView.text = "❌ Errore aggiornamento status\n\nProva a riavviare l'app"
         }
         
         permissionsButton.isEnabled = !hasPermissions
@@ -345,8 +375,72 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun showRecentEvents() {
+        // Controlla SharedPreferences per eventi recenti
+        val prefs = getSharedPreferences("spam_detector", MODE_PRIVATE)
+        val lastTestTime = prefs.getLong("last_test_time", 0)
+        val lastCallTime = prefs.getLong("last_call_time", 0)
+        val lastCallNumber = prefs.getString("last_call_number", "Nessuno")
+        
+        val eventsInfo = StringBuilder("📋 Eventi Recenti:\n\n")
+        
+        if (lastTestTime > 0) {
+            val testDate = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.getDefault())
+                .format(java.util.Date(lastTestTime))
+            eventsInfo.append("🧪 Ultimo test: $testDate\n")
+        } else {
+            eventsInfo.append("🧪 Nessun test eseguito\n")
+        }
+        
+        if (lastCallTime > 0) {
+            val callDate = java.text.SimpleDateFormat("dd/MM/yyyy HH:mm:ss", java.util.Locale.getDefault())
+                .format(java.util.Date(lastCallTime))
+            eventsInfo.append("📞 Ultima chiamata: $callDate\n")
+            eventsInfo.append("📱 Numero: $lastCallNumber\n")
+        } else {
+            eventsInfo.append("📞 Nessuna chiamata intercettata\n")
+        }
+        
+        eventsInfo.append("\n💡 Come testare:\n")
+        eventsInfo.append("1. Attiva il rilevamento\n")
+        eventsInfo.append("2. Usa 'Test Completo'\n")
+        eventsInfo.append("3. Oppure ricevi una chiamata vera\n")
+        eventsInfo.append("4. Controlla le notifiche!\n\n")
+        eventsInfo.append("🔧 Se non funziona:\n")
+        eventsInfo.append("• Verifica tutti i permessi\n")
+        eventsInfo.append("• Disattiva ottimizzazione batteria\n")
+        eventsInfo.append("• Riavvia l'app")
+        
+        android.app.AlertDialog.Builder(this)
+            .setTitle("📋 Log Eventi SpamDetector")
+            .setMessage(eventsInfo.toString())
+            .setPositiveButton("OK", null)
+            .setNegativeButton("Cancella Log", { _, _ ->
+                // Cancella i log salvati
+                prefs.edit()
+                    .remove("last_test_time")
+                    .remove("last_call_time")
+                    .remove("last_call_number")
+                    .apply()
+                Toast.makeText(this, "Log cancellati", Toast.LENGTH_SHORT).show()
+            })
+            .show()
+    }
+
     override fun onResume() {
         super.onResume()
-        updateStatus()
+        Log.d("MainActivity", "🔄 onResume - Aggiornamento UI")
+        
+        // Forza refresh dell'UI
+        runOnUiThread {
+            updateStatus()
+        }
+        
+        // Backup: se ancora non funziona, mostra almeno lo stato base
+        statusTextView.postDelayed({
+            if (statusTextView.text.isEmpty() || statusTextView.text == "🔄 Inizializzazione in corso...") {
+                statusTextView.text = "🛡️ SpamDetector Attivo\n\nControlla lo switch sopra per attivare/disattivare il rilevamento.\n\nUsa 'TEST WHATSAPP' per testare il sistema."
+            }
+        }, 500)
     }
 }

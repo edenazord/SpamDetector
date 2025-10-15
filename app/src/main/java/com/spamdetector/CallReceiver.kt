@@ -39,6 +39,13 @@ class CallReceiver : BroadcastReceiver() {
                     
                     if (isSpamDetectionEnabled) {
                         Log.d(TAG, "✅ Rilevamento spam attivo - Avvio controllo")
+                        
+                        // Salva info chiamata per il log
+                        prefs.edit()
+                            .putLong("last_call_time", System.currentTimeMillis())
+                            .putString("last_call_number", incomingNumber)
+                            .apply()
+                        
                         // Avvia il servizio di rilevamento spam
                         val serviceIntent = Intent(context, CallDetectionService::class.java)
                         serviceIntent.putExtra("phoneNumber", incomingNumber)
