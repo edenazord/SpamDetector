@@ -275,8 +275,6 @@ class MainActivity : AppCompatActivity() {
             })
             .show()
     }
-        Toast.makeText(this, "Test 'Salva al Volo' completato", Toast.LENGTH_SHORT).show()
-    }
 
     private fun updateStatus() {
         val isEnabled = enableSwitch.isChecked
