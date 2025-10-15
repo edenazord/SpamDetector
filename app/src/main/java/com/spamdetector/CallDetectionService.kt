@@ -1,7 +1,20 @@
 package com.spamdetector
 
 import android.app.NotificationChannel
-import android.app.NotificationManager
+import andro        val detailText = when {
+            !tempInfo.wasCreated -> 
+                "❌ Impossibile creare contatto temporaneo per verificare $phoneNumber.\n\n" +
+                "🔒 Controlla i permessi dell'app per accedere ai contatti."
+            
+            !tempInfo.hasPhoto -> 
+                "📸 Il numero $phoneNumber è stato salvato temporaneamente ma NON ha generato foto profilo.\n\n" +
+                "🚨 Probabilmente è spam, call center o numero commerciale.\n\n" +
+                "💡 I numeri veri solitamente si sincronizzano con foto da social/WhatsApp."
+            
+            else -> 
+                "✅ Il numero $phoneNumber ha generato una foto profilo dopo il salvataggio.\n\n" +
+                "👤 Probabilmente è una persona vera con account social attivi."
+        }cationManager
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -63,17 +76,48 @@ class CallDetectionService : Service() {
     }
 
     private fun showSpamNotification(phoneNumber: String) {
+        // � Ottieni informazioni "salva al volo" per la notifica
+        val tempInfo = spamChecker.getTempContactInfo(phoneNumber)
+        
+        val title = when {
+            !tempInfo.wasCreated -> "🚨 ERRORE CONTROLLO"
+            !tempInfo.hasPhoto -> "🚨 NESSUNA FOTO PROFILO"
+            else -> "✅ NUMERO VERIFICATO"
+        }
+        
+        val message = when {
+            !tempInfo.wasCreated -> "Impossibile verificare numero"
+            !tempInfo.hasPhoto -> "Nessuna foto dopo sincronizzazione"
+            else -> "Foto profilo trovata"
+        }
+        
+        val detailText = when {
+            !whatsappInfo.hasWhatsApp -> 
+                "� Il numero $phoneNumber NON ha WhatsApp.\n\n" +
+                "� Probabilmente è un call center, spam o numero commerciale.\n\n" +
+                "💡 Le persone vere solitamente hanno WhatsApp."
+            
+            !whatsappInfo.hasPhoto -> 
+                "� Il numero $phoneNumber ha WhatsApp ma NON ha foto profilo.\n\n" +
+                "⚠️ Potrebbe essere un account business, spam o fake.\n\n" +
+                "💡 Le persone vere di solito hanno una foto profilo."
+            
+            else -> "🔍 Chiamata rilevata come sospetta dal sistema."
+        }
+        
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_alert)
-            .setContentTitle("⚠️ Possibile Spam Rilevato")
-            .setContentText("Chiamata sospetta da: $phoneNumber")
-            .setStyle(NotificationCompat.BigTextStyle()
-                .bigText("Il numero $phoneNumber NON ha WhatsApp e potrebbe essere spam."))
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentTitle(title)
+            .setContentText("⚠️ $phoneNumber - $message")
+            .setStyle(NotificationCompat.BigTextStyle().bigText(detailText))
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
             .setAutoCancel(true)
+            .setVibrate(longArrayOf(0, 500, 200, 500))
             .build()
 
-        notificationManager.notify(NOTIFICATION_ID, notification)
+        notificationManager.notify(NOTIFICATION_ID + System.currentTimeMillis().toInt(), notification)
     }
 
     private fun createNotificationChannel() {

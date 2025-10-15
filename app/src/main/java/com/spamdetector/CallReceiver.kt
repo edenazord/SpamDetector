@@ -26,11 +26,20 @@ class CallReceiver : BroadcastReceiver() {
                 if (!incomingNumber.isNullOrEmpty()) {
                     Log.d(TAG, "Chiamata in arrivo da: $incomingNumber")
                     
-                    // Avvia il servizio di rilevamento spam
-                    val serviceIntent = Intent(context, CallDetectionService::class.java)
-                    serviceIntent.putExtra("phone_number", incomingNumber)
-                    serviceIntent.putExtra("action", "CHECK_SPAM")
-                    context.startService(serviceIntent)
+                    // 🔧 Controlla se il rilevamento spam è attivo
+                    val prefs = context.getSharedPreferences("spam_detector", Context.MODE_PRIVATE)
+                    val isSpamDetectionEnabled = prefs.getBoolean("spam_detection_enabled", false)
+                    
+                    if (isSpamDetectionEnabled) {
+                        Log.d(TAG, "✅ Rilevamento spam attivo - Avvio controllo")
+                        // Avvia il servizio di rilevamento spam
+                        val serviceIntent = Intent(context, CallDetectionService::class.java)
+                        serviceIntent.putExtra("phone_number", incomingNumber)
+                        serviceIntent.putExtra("action", "CHECK_SPAM")
+                        context.startService(serviceIntent)
+                    } else {
+                        Log.d(TAG, "⏸️ Rilevamento spam disattivato - Nessun controllo")
+                    }
                 }
             }
             TelephonyManager.EXTRA_STATE_OFFHOOK -> {

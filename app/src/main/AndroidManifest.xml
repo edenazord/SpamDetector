@@ -10,14 +10,24 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     
-    <!-- Permessi per verificare WhatsApp -->
-    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+    <!-- � Permessi per tecnica "salva al volo" -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <uses-permission android:name="android.permission.INTERNET" />
     
-    <!-- Query per rilevare WhatsApp installato -->
+    <!-- 💚 Query per rilevare WhatsApp installato -->
     <queries>
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="https"
+                android:host="wa.me" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
     </queries>
 
     <application

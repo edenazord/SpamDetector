@@ -1,8 +1,45 @@
-package com.spamdetector
+pac        val results = StringBuilder("🧪 Test 'Salva al Volo':\n\n")
+        
+        testNumbers.forEach { number ->
+            val tempInfo = spamChecker.getTempContactInfo(number)
+            val isSpam = spamChecker.isSpam(number)
+            
+            val status = when {
+                !tempInfo.wasCreated -> "❌ Errore creazione (ERRORE)"
+                !tempInfo.hasPhoto -> "🚨 NO foto sync (SPAM)"
+                else -> "✅ Foto generata (SICURO)"
+            }
+            
+            results.append("$number → $status\n")
+            results.append("   📝 Creato: ${tempInfo.wasCreated}\n")
+            results.append("   📸 Foto: ${tempInfo.hasPhoto}\n")
+            results.append("   🔄 Sync: ${tempInfo.syncedWithSocial}\n")
+        }ctor
 
 import android.Manifest
-import android.content.pm.PackageManager
-import android.os.Bundle
+import android.content.pm.Packag        val results = StringBuilder("🧪 Test Rilevamento Spam (WhatsApp + Foto):\n\n")
+        
+        testNumbers.forEach { number ->
+            val whatsappInfo = spamChecker.getWhatsAppInfo(number)
+            val isSpam = spamChecker.isSpam(number)
+            
+            val status = when {
+                !whatsappInfo.hasWhatsApp -> "🚨 NO WhatsApp (SPAM)"
+                whatsappInfo.hasWhatsApp && whatsappInfo.hasPhoto -> "✅ WhatsApp + Foto (SICURO)"
+                whatsappInfo.hasWhatsApp && !whatsappInfo.hasPhoto -> "⚠️ WhatsApp senza foto (SOSPETTO)"
+                else -> "❓ Indeterminato"
+            }
+            
+            results.append("$number → $status\n")
+            results.append("   💚 WhatsApp: ${whatsappInfo.hasWhatsApp}\n")
+            results.append("   � Foto: ${whatsappInfo.hasPhoto}\n")
+        }
+        
+        results.append("\n📊 ${spamChecker.getCheckStats()}")
+
+        statusTextView.text = results.toString()
+        
+        Toast.makeText(this, "Test 'Salva al Volo' completato", Toast.LENGTH_SHORT).show()ort android.os.Bundle
 import android.widget.Button
 import android.widget.Switch
 import android.widget.TextView
@@ -30,9 +67,17 @@ class MainActivity : AppCompatActivity() {
         
         spamChecker = SpamChecker(this)
         initializeViews()
+        loadSwitchState() // 📱 Carica stato switch salvato
         setupListeners()
         updateStatus()
         checkPermissions()
+    }
+    
+    private fun loadSwitchState() {
+        // 📱 Carica stato switch da SharedPreferences
+        val prefs = getSharedPreferences("spam_detector", MODE_PRIVATE)
+        val isEnabled = prefs.getBoolean("spam_detection_enabled", false)
+        enableSwitch.isChecked = isEnabled
     }
 
     private fun initializeViews() {
@@ -67,11 +112,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun enableSpamDetection() {
-        Toast.makeText(this, "Rilevamento spam attivato", Toast.LENGTH_SHORT).show()
+        // 💾 Salva stato switch
+        val prefs = getSharedPreferences("spam_detector", MODE_PRIVATE)
+        prefs.edit().putBoolean("spam_detection_enabled", true).apply()
+        
+        Toast.makeText(this, "✅ Rilevamento spam attivato", Toast.LENGTH_SHORT).show()
     }
 
     private fun disableSpamDetection() {
-        Toast.makeText(this, "Rilevamento spam disattivato", Toast.LENGTH_SHORT).show()
+        // 💾 Salva stato switch
+        val prefs = getSharedPreferences("spam_detector", MODE_PRIVATE)
+        prefs.edit().putBoolean("spam_detection_enabled", false).apply()
+        
+        Toast.makeText(this, "⏸️ Rilevamento spam disattivato", Toast.LENGTH_SHORT).show()
     }
 
     private fun testSpamDetection() {
@@ -79,23 +132,23 @@ class MainActivity : AppCompatActivity() {
         val testNumbers = listOf(
             "+393331234567",  // Numero italiano tipico
             "+393401234567",  // Altro numero italiano
-            "+12025551234",   // Numero USA (probabilmente senza WhatsApp locale)
+            "+12025551234",   // Numero USA (probabilmente non in rubrica)
             "+441234567890"   // Numero UK
         )
 
-        val results = StringBuilder("🧪 Test Rilevamento WhatsApp:\n\n")
+        val results = StringBuilder("🧪 Test Rilevamento Foto Profilo:\n\n")
         
         testNumbers.forEach { number ->
             val isSpam = spamChecker.isSpam(number)
-            val status = if (isSpam) "🚨 NO WhatsApp (SPAM)" else "✅ Ha WhatsApp (LECITO)"
+            val status = if (isSpam) "🚨 NO Foto (SPAM)" else "✅ Ha Foto (SICURO)"
             results.append("$number → $status\n")
         }
         
-        results.append("\n📋 Stato WhatsApp:\n${spamChecker.getCheckStats()}")
+        results.append("\n� ${spamChecker.getCheckStats()}")
 
         statusTextView.text = results.toString()
         
-        Toast.makeText(this, "Test WhatsApp completato", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, "Test controllo foto completato", Toast.LENGTH_SHORT).show()
     }
 
     private fun updateStatus() {
@@ -118,6 +171,8 @@ class MainActivity : AppCompatActivity() {
     private fun hasRequiredPermissions(): Boolean {
         val requiredPermissions = arrayOf(
             Manifest.permission.READ_PHONE_STATE,
+            Manifest.permission.READ_CONTACTS,     // 📸 Per leggere contatti esistenti
+            Manifest.permission.WRITE_CONTACTS,    // 📸 Per tecnica "salva al volo"
             Manifest.permission.POST_NOTIFICATIONS
         )
         
@@ -130,6 +185,8 @@ class MainActivity : AppCompatActivity() {
         val requiredPermissions = arrayOf(
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.READ_CONTACTS,     // 📸 Per leggere contatti esistenti  
+            Manifest.permission.WRITE_CONTACTS,    // 📸 Per tecnica "salva al volo"
             Manifest.permission.POST_NOTIFICATIONS
         )
         

@@ -17,10 +17,41 @@ android {
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    buildTypes {
+    // 🔑 Configurazione per signing degli APK (GitHub Actions)
+    signingConfigs {
         release {
+            // Usa variabili d'ambiente per CI/CD
+            if (System.getenv("KEYSTORE_FILE")) {
+                storeFile file(System.getenv("KEYSTORE_FILE"))
+                storePassword System.getenv("KEYSTORE_PASSWORD")
+                keyAlias System.getenv("KEY_ALIAS") 
+                keyPassword System.getenv("KEY_PASSWORD")
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+            debuggable true
             minifyEnabled false
+            // APK debug sempre disponibile
+        }
+        
+        release {
+            minifyEnabled true
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            
+            // Usa signing config se disponibile, altrimenti debug key
+            if (System.getenv("KEYSTORE_FILE")) {
+                signingConfig signingConfigs.release
+            }
+            
+            // 🚀 Ottimizzazioni per APK più piccoli e veloci
+            zipAlignEnabled true
+            crunchPngs true
         }
     }
     compileOptions {
