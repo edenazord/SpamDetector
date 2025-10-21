@@ -146,9 +146,9 @@ class MainActivity : AppCompatActivity() {
         Log.d("MainActivity", "🎯 Simulazione chiamata da $testNumber")
         
         // Test del CallReceiver (simula una chiamata)
-        val receiverIntent = android.content.Intent("android.intent.action.PHONE_STATE")
-        receiverIntent.putExtra("state", "RINGING")
-        receiverIntent.putExtra("incoming_number", testNumber)
+    val receiverIntent = android.content.Intent("android.intent.action.PHONE_STATE")
+    receiverIntent.putExtra(android.telephony.TelephonyManager.EXTRA_STATE, android.telephony.TelephonyManager.EXTRA_STATE_RINGING)
+    receiverIntent.putExtra(android.telephony.TelephonyManager.EXTRA_INCOMING_NUMBER, testNumber)
         
         val callReceiver = CallReceiver()
         callReceiver.onReceive(this, receiverIntent)
@@ -412,11 +412,35 @@ class MainActivity : AppCompatActivity() {
         eventsInfo.append("• Disattiva ottimizzazione batteria\n")
         eventsInfo.append("• Riavvia l'app")
         
+        // Aggiungi storico controlli
+        val history = EventLogger.getHistory(this)
+        if (history.isNotEmpty()) {
+            eventsInfo.append("\n🕵️ Esiti controlli (ultimi ${history.size}):\n")
+            val sdf = java.text.SimpleDateFormat("dd/MM HH:mm:ss", java.util.Locale.getDefault())
+            history.forEach { h ->
+                val date = sdf.format(java.util.Date(h.timestamp))
+                val status = when {
+                    h.isKnownContact -> "Rubrica"
+                    !h.wasCreated -> "Errore"
+                    h.hasWhatsApp -> "WhatsApp✔"
+                    h.hasPhoto -> "Foto✔"
+                    else -> "NoFoto"
+                }
+                eventsInfo.append("• ${date}  ${h.phoneNumber}  [${status}]\n")
+            }
+        } else {
+            eventsInfo.append("\n🕵️ Nessun esito controlli registrato\n")
+        }
+
         android.app.AlertDialog.Builder(this)
             .setTitle("📋 Log Eventi SpamDetector")
             .setMessage(eventsInfo.toString())
             .setPositiveButton("OK", null)
-            .setNegativeButton("Cancella Log", { _, _ ->
+            .setNeutralButton("Pulisci Storico") { _, _ ->
+                EventLogger.clear(this)
+                Toast.makeText(this, "Storico cancellato", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancella Log") { _, _ ->
                 // Cancella i log salvati
                 prefs.edit()
                     .remove("last_test_time")
@@ -424,7 +448,7 @@ class MainActivity : AppCompatActivity() {
                     .remove("last_call_number")
                     .apply()
                 Toast.makeText(this, "Log cancellati", Toast.LENGTH_SHORT).show()
-            })
+            }
             .show()
     }
 

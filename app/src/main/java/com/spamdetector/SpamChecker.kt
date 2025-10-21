@@ -21,7 +21,8 @@ class SpamChecker(private val context: Context) {
         val wasCreated: Boolean,
         val hasPhoto: Boolean,
         val contactId: String? = null,
-        val syncedWithSocial: Boolean = false
+        val syncedWithSocial: Boolean = false,
+        val hasWhatsApp: Boolean = false
     )
     
     /**
@@ -55,7 +56,7 @@ class SpamChecker(private val context: Context) {
         Log.i(TAG, "   - Ha foto: ${tempResult.hasPhoto}")
         Log.i(TAG, "   - Sincronizzato: ${tempResult.syncedWithSocial}")
         
-        val isSpam = !tempResult.hasPhoto
+    val isSpam = !(tempResult.hasWhatsApp || tempResult.hasPhoto)
         
         if (isSpam) {
             Log.w(TAG, "🚨 SPAM: Il numero $phoneNumber NON ha generato foto profilo")
@@ -72,32 +73,43 @@ class SpamChecker(private val context: Context) {
      * @return ID del contatto se trovato, null altrimenti
      */
     private fun findExistingContact(phoneNumber: String): String? {
-        val projection = arrayOf(
-            ContactsContract.CommonDataKinds.Phone.CONTACT_ID,
-            ContactsContract.CommonDataKinds.Phone.NUMBER
-        )
-        
-        val cursor: Cursor? = context.contentResolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            projection,
-            null,
-            null,
-            null
-        )
-        
-        cursor?.use {
-            while (it.moveToNext()) {
-                val contactId = it.getString(it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.CONTACT_ID))
-                val savedNumber = it.getString(it.getColumnIndexOrThrow(ContactsContract.CommonDataKinds.Phone.NUMBER))
-                
-                if (phoneNumbersMatch(phoneNumber, savedNumber)) {
-                    Log.d(TAG, "📱 Contatto esistente trovato: $contactId per $phoneNumber")
-                    return contactId
+        // Usa PhoneLookup per un matching più accurato e performante
+        return try {
+            val uri = Uri.withAppendedPath(
+                ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
+                Uri.encode(phoneNumber)
+            )
+
+            val projection = arrayOf(
+                ContactsContract.PhoneLookup._ID,
+                ContactsContract.PhoneLookup.LOOKUP_KEY,
+                ContactsContract.PhoneLookup.NUMBER
+            )
+
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val idIndex = cursor.getColumnIndex(ContactsContract.PhoneLookup._ID)
+                    val foundId = if (idIndex >= 0) cursor.getLong(idIndex).toString() else null
+                    val savedNumber = cursor.getString(cursor.getColumnIndexOrThrow(ContactsContract.PhoneLookup.NUMBER))
+                    if (foundId != null && phoneNumbersMatch(phoneNumber, savedNumber)) {
+                        Log.d(TAG, "📱 Contatto esistente trovato: $foundId per $phoneNumber")
+                        return foundId
+                    }
                 }
             }
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Errore ricerca contatto esistente", e)
+            null
         }
-        
-        return null
+    }
+
+    /**
+     * 🔎 Verifica pubblica se un numero è già presente in rubrica
+     */
+    fun isInContacts(phoneNumber: String): Boolean {
+        val clean = cleanPhoneNumber(phoneNumber)
+        return findExistingContact(clean) != null
     }
     
     /**
@@ -124,18 +136,26 @@ class SpamChecker(private val context: Context) {
             
             Log.d(TAG, "✅ Contatto temporaneo creato con ID: $contactId")
             
-            // 2️⃣ Aspetta sincronizzazione automatica (WhatsApp, social, ecc.)
-            Thread.sleep(2000) // 2 secondi per sync
-            
-            // 3️⃣ Controlla se ha ottenuto una foto profilo
-            val hasPhoto = checkContactHasPhoto(contactId!!)
-            Log.d(TAG, "📸 Dopo sync - Ha foto: $hasPhoto")
+            // 2️⃣ Attende la possibile sincronizzazione (polling fino a timeout)
+            val maxWait = 12000L
+            val step = 500L
+            var hasPhoto = false
+            var hasWhatsApp = false
+            val start = System.currentTimeMillis()
+            do {
+                if (!hasPhoto) hasPhoto = checkContactHasPhoto(contactId!!)
+                if (!hasWhatsApp) hasWhatsApp = checkContactHasWhatsApp(contactId!!, cleanNumber)
+                if (hasPhoto || hasWhatsApp) break
+                try { Thread.sleep(step) } catch (_: InterruptedException) {}
+            } while (System.currentTimeMillis() - start < maxWait)
+            Log.d(TAG, "📸 Dopo sync - Ha foto: $hasPhoto | 📱 WhatsApp: $hasWhatsApp")
             
             return TempContactInfo(
                 wasCreated = true,
                 hasPhoto = hasPhoto,
                 contactId = contactId,
-                syncedWithSocial = hasPhoto // Se ha foto, significa che si è sincronizzato
+                syncedWithSocial = hasPhoto || hasWhatsApp, // Se ha foto o WA, consideriamo sincronizzato
+                hasWhatsApp = hasWhatsApp
             )
             
         } catch (e: Exception) {
@@ -153,6 +173,55 @@ class SpamChecker(private val context: Context) {
                 }
             }
         }
+    }
+
+    /**
+     * 📱 Controlla se un contatto ha integrazione WhatsApp (Data/RawContacts)
+     * Nota: richiede che l'utente abbia concesso a WhatsApp l'accesso ai contatti
+     */
+    private fun checkContactHasWhatsApp(contactId: String, cleanNumber: String): Boolean {
+        // 1) Cerca RawContacts con account-type WhatsApp
+        try {
+            val rawProjection = arrayOf(
+                ContactsContract.RawContacts._ID,
+                ContactsContract.RawContacts.ACCOUNT_TYPE
+            )
+            context.contentResolver.query(
+                ContactsContract.RawContacts.CONTENT_URI,
+                rawProjection,
+                "${ContactsContract.RawContacts.CONTACT_ID} = ? AND ${ContactsContract.RawContacts.ACCOUNT_TYPE} = ?",
+                arrayOf(contactId, "com.whatsapp"),
+                null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    Log.d(TAG, "📱 WA: trovato RawContact com.whatsapp per contatto $contactId")
+                    return true
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 2) Cerca Data rows con mimetype WhatsApp
+        try {
+            val dataProjection = arrayOf(
+                ContactsContract.Data._ID,
+                ContactsContract.Data.MIMETYPE,
+                ContactsContract.Data.DATA1
+            )
+            context.contentResolver.query(
+                ContactsContract.Data.CONTENT_URI,
+                dataProjection,
+                "${ContactsContract.Data.CONTACT_ID} = ? AND ${ContactsContract.Data.MIMETYPE} LIKE ?",
+                arrayOf(contactId, "%com.whatsapp%"),
+                null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    Log.d(TAG, "📱 WA: trovato Data mimetype WhatsApp per contatto $contactId")
+                    return true
+                }
+            }
+        } catch (_: Exception) {}
+
+        return false
     }
     
     /**
@@ -239,21 +308,64 @@ class SpamChecker(private val context: Context) {
      * @return true se ha foto, false altrimenti
      */
     private fun checkContactHasPhoto(contactId: String): Boolean {
-        val photoUri = Uri.withAppendedPath(
+        // 1) Usa l'API helper per foto high-res quando disponibile
+        try {
+            val contactUri = Uri.withAppendedPath(ContactsContract.Contacts.CONTENT_URI, contactId)
+            ContactsContract.Contacts.openContactPhotoInputStream(context.contentResolver, contactUri, true)?.use {
+                Log.d(TAG, "📸 Contatto $contactId ha foto (high-res)")
+                return true
+            }
+        } catch (_: Exception) {}
+
+        // 2) Fallback: controlla PHOTO_URI / PHOTO_THUMBNAIL_URI sulla tabella Contatti aggregati
+        try {
+            val projection = arrayOf(
+                ContactsContract.Contacts.PHOTO_URI,
+                ContactsContract.Contacts.PHOTO_THUMBNAIL_URI
+            )
+            context.contentResolver.query(
+                ContactsContract.Contacts.CONTENT_URI,
+                projection,
+                "${ContactsContract.Contacts._ID} = ?",
+                arrayOf(contactId),
+                null
+            )?.use { c ->
+                if (c.moveToFirst()) {
+                    val photoUri = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts.PHOTO_URI))
+                    val thumbUri = c.getString(c.getColumnIndexOrThrow(ContactsContract.Contacts.PHOTO_THUMBNAIL_URI))
+                    val has = !photoUri.isNullOrBlank() || !thumbUri.isNullOrBlank()
+                    if (has) Log.d(TAG, "📸 Contatto $contactId ha photoUri=$photoUri thumb=$thumbUri")
+                    return has
+                }
+            }
+        } catch (_: Exception) {}
+
+        // 3) Ultimo tentativo: vecchio percorso /photo
+        val legacyUri = Uri.withAppendedPath(
             ContactsContract.Contacts.CONTENT_URI,
             "$contactId/${ContactsContract.Contacts.Photo.CONTENT_DIRECTORY}"
         )
-        
         return try {
-            val inputStream: InputStream? = context.contentResolver.openInputStream(photoUri)
+            val inputStream: InputStream? = context.contentResolver.openInputStream(legacyUri)
             val hasPhoto = inputStream != null
             inputStream?.close()
-            Log.d(TAG, "📸 Contatto $contactId ha foto: $hasPhoto")
+            if (hasPhoto) Log.d(TAG, "📸 Contatto $contactId ha foto (legacy)")
             hasPhoto
-        } catch (e: Exception) {
-            Log.d(TAG, "📸 Nessuna foto per contatto $contactId")
+        } catch (_: Exception) {
             false
         }
+    }
+
+    /**
+     * ⏳ Attende fino a maxWaitMs in polling che compaia una foto per il contatto
+     */
+    private fun waitForPhoto(contactId: String, maxWaitMs: Long, stepMs: Long): Boolean {
+        val start = System.currentTimeMillis()
+        do {
+            if (checkContactHasPhoto(contactId)) return true
+            try { Thread.sleep(stepMs) } catch (_: InterruptedException) {}
+        } while (System.currentTimeMillis() - start < maxWaitMs)
+        return false
     }
     
     /**

@@ -67,7 +67,36 @@ class CallDetectionService : Service() {
         serviceScope.launch {
             try {
                 val cleanNumber = spamChecker.cleanPhoneNumber(phoneNumber)
-                val tempInfo = spamChecker.createTempContactAndCheck(cleanNumber, phoneNumber)
+
+                // Se il numero è già in rubrica, notifica come "legittimo" e non fare controlli
+                if (spamChecker.isInContacts(cleanNumber)) {
+                    // Logga l'esito in modalità verifica
+                    EventLogger.logCheck(
+                        this@CallDetectionService,
+                        phoneNumber = phoneNumber,
+                        isKnownContact = true,
+                        wasCreated = false,
+                        hasPhoto = true, // contatto noto: consideriamo "sicuro"
+                        syncedWithSocial = false
+                    )
+                    showKnownContactNotification(phoneNumber)
+                    return@launch
+                }
+
+                // Esegui le operazioni IO fuori dal main thread
+                val tempInfo = kotlinx.coroutines.withContext(Dispatchers.IO) {
+                    spamChecker.createTempContactAndCheck(cleanNumber, phoneNumber)
+                }
+                // Log per verifica esito
+                EventLogger.logCheck(
+                    this@CallDetectionService,
+                    phoneNumber = phoneNumber,
+                    isKnownContact = false,
+                    wasCreated = tempInfo.wasCreated,
+                    hasPhoto = tempInfo.hasPhoto,
+                        syncedWithSocial = tempInfo.syncedWithSocial,
+                        hasWhatsApp = tempInfo.hasWhatsApp
+                )
                 showSpamNotification(phoneNumber, tempInfo)
             } catch (e: Exception) {
                 Log.e(TAG, "Errore durante controllo spam", e)
@@ -76,22 +105,37 @@ class CallDetectionService : Service() {
         }
     }
 
+    private fun showKnownContactNotification(phoneNumber: String) {
+        val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_call)
+            .setContentTitle("Contatto salvato in rubrica")
+            .setContentText("Chiamata da $phoneNumber: nessun controllo spam necessario")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setAutoCancel(true)
+            .build()
+        notificationManager.notify(NOTIFICATION_ID, notification)
+        Log.d(TAG, "Notifica contatto noto mostrata")
+    }
+
     private fun showSpamNotification(phoneNumber: String, tempInfo: SpamChecker.TempContactInfo) {
         val title = when {
-            !tempInfo.wasCreated -> "Errore Controllo Spam"
-            !tempInfo.hasPhoto -> "Possibile Spam Rilevato"
-            else -> "Chiamata Legittima"
+            !tempInfo.wasCreated -> "Errore Controllo"
+            tempInfo.hasWhatsApp || tempInfo.hasPhoto -> "Chiamata Prob. Legittima"
+            else -> "Possibile Spam Rilevato"
         }
-        
+
         val detailText = when {
-            !tempInfo.wasCreated -> 
-                "Impossibile creare contatto temporaneo per verificare $phoneNumber. Controlla i permessi dell'app per accedere ai contatti."
-            
-            !tempInfo.hasPhoto -> 
-                "Il numero $phoneNumber e stato salvato temporaneamente ma NON ha generato foto profilo. Probabilmente e spam, call center o numero commerciale."
-            
-            else -> 
-                "Il numero $phoneNumber ha generato una foto profilo dopo il salvataggio. Probabilmente e una persona vera con account social attivi."
+            !tempInfo.wasCreated ->
+                "Impossibile verificare $phoneNumber (creazione contatto fallita). Controlla i permessi ai Contatti."
+
+            tempInfo.hasWhatsApp ->
+                "WhatsApp rilevato per $phoneNumber. Classificato come NON spam."
+
+            tempInfo.hasPhoto ->
+                "$phoneNumber ha una foto profilo (fonte contatti). Classificato come NON spam."
+
+            else ->
+                "$phoneNumber non ha segnali (niente WhatsApp/foto). Possibile spam, call center o numero commerciale."
         }
         
         val notification = NotificationCompat.Builder(this, NOTIFICATION_CHANNEL_ID)
